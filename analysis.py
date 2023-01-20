@@ -10,8 +10,6 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.colors import LinearSegmentedColormap
 from scipy import stats
 from sklearn.datasets import *
-from sklearn import tree
-# from dtreeviz.trees import *
 import math
 from graphviz import Digraph
 def netMetaboliteStoich(cobra_model,rxnlist):
@@ -827,7 +825,7 @@ def generateuniformbudget(model,solution,metin='ATP',altmets=['aATP'],cells=['_M
       tempname=tempname[0].upper()+tempname[1:]
       if not any([y in rxn for y in rxnexceptions]):
         tempname=tempname+' ('+rxn.split('_')[-3]+')'
-      namedict['_'.join(rxn.split('_')[:-2])]=tempname
+      namedict['_'.join(rxn.split('_')[:-2])]=tempname+' '*(62-len(tempname))
   # Work out threshold for 'other' reactions
   # Want no more than 17 different reactions per cell.
   not17={}
@@ -961,7 +959,7 @@ def generateuniformbudget(model,solution,metin='ATP',altmets=['aATP'],cells=['_M
       if percentage:
         plt.ylabel(metin+" produced/consumed (%)")
       else:
-        plt.ylabel(metin+" produced/consumed (µM/m$^2$/s)")
+        plt.ylabel(metin+" produced/consumed \n(µmol/m$^2$/s)")
       handles, labels = plt.gca().get_legend_handles_labels()
       if names:
         lgd=plt.legend(handles,[namedict[x] if x in list(namedict.keys()) else x for x in labels],bbox_to_anchor=(1.05,1),loc='upper left',frameon=False)
@@ -1770,10 +1768,10 @@ def plot_apo_transport(stem_model,psol,cell_type='CC_l',thresh=5e-5,yscale=None,
     # plt.bar(np.arange(len(data2))+ width, data2, width=width)
 #     plt.legend(['apo ->'+cell_type])
     if ybreak:
-        axb.set_ylabel(r'flux ($\mu$M/m$^2$/s)',labelpad=3)
+        axb.set_ylabel(r'flux ($\mu$mol/m$^2$/s)',labelpad=3)
         axb.yaxis.set_label_coords(-.2, 0.5)
     else:
-        plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+        plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
     plt.rc('font', size=18)
     if yscale:
         if not rangeplot and not any([x<-5e-5 for x in data1]):
@@ -1872,7 +1870,7 @@ def plot_diel(cons_model, csol,thresh=5e-5,ymax=None,pc=0,fva_sol=None,rangeplot
                     ax.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
                     ax2.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
                     ax3.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
-                    ax2.set_ylabel(r'flux ($\mu$M/m$^2$/s)')
+                    ax2.set_ylabel(r'flux ($\mu$mol/m$^2$/s)')
                     if rangeplot:
                         ax.errorbar(np.arange(len(aa_syn_dict[cell_list[ii]]))+(ii-1.5)*width,
                             aa_syn_dict[cell_list[ii]],
@@ -1903,9 +1901,9 @@ def plot_diel(cons_model, csol,thresh=5e-5,ymax=None,pc=0,fva_sol=None,rangeplot
                     kwargs = dict(marker=[(-1, -d), (1, d)], markersize=12,
                                   linestyle="none", color='k', mec='k', mew=1, clip_on=False)
                     ax.plot([0, 1], [0, 0], transform=ax.transAxes, **kwargs, label='_nolegend_')
-#                     plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+#                     plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
                     ax2.plot([0, 1], [1, 1], transform=ax2.transAxes, **kwargs, label='_nolegend_')
-                    ax.set_ylabel(r'flux ($\mu$M/m$^2$/s)')
+                    ax.set_ylabel(r'flux ($\mu$mol/m$^2$/s)')
                     if rangeplot:
                         ax.errorbar(np.arange(len(aa_syn_dict[cell_list[ii]]))+(ii-1.5)*width,
                             aa_syn_dict[cell_list[ii]],
@@ -1918,7 +1916,7 @@ def plot_diel(cons_model, csol,thresh=5e-5,ymax=None,pc=0,fva_sol=None,rangeplot
         else:
             plt.bar(np.arange(len(aa_syn_dict[cell_list[ii]]))+(ii-1.5)*width,
                     aa_syn_dict[cell_list[ii]], width=width)
-            plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+            plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
             if rangeplot:
                 plt.errorbar(np.arange(len(aa_syn_dict[cell_list[ii]]))+(ii-1.5)*width,
                     aa_syn_dict[cell_list[ii]],
@@ -2170,7 +2168,7 @@ def plot_aa_synth(cons_model, csolin,ss=['glycolysis'],thresh=1e-5,phases=['_l',
     if ymax and not ybreak:
         plt.ylim([0,ymax])
     # plt.savefig('RegrEx_plots/'+'1_transfer_large_day.png', bbox_inches='tight')
-    plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+    plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
     plt.show()
     # if deg:
     #     plt.figure(figsize=(len(labels)/2,4.8))
@@ -2179,7 +2177,7 @@ def plot_aa_synth(cons_model, csolin,ss=['glycolysis'],thresh=1e-5,phases=['_l',
     #         plt.bar(np.arange(len(aa_deg_dict[cell_list[ii]]))+(ii-1.5)*width,
     #                 aa_deg_dict[cell_list[ii]], width=width)
     #     plt.legend(cell_list)
-    #     plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+    #     plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
     #     plt.title('AA degradation')
     #     if ymax:
     #         plt.ylim([0,ymax])
@@ -2290,7 +2288,7 @@ def plot_aa_synth_presentation(cons_model, csol,ss=['glycolysis'],thresh=1e-5,ph
             plt.xticks(range(len(aa_syn_dict[cell_list[ii]])), labels,rotation='vertical')
             plt.rc('font', size=18)
             axes[1,ii].set_ylabel(r'flux')
-            axes[0,ii].set_ylabel(r'($\mu$M/m$^2$/s)')
+            axes[0,ii].set_ylabel(r'($\mu$mol/m$^2$/s)')
             if rangeplot:
                 # if any([x<-1e-3 for x in aa_syn_dictmax[cell_list[ii]]]):
                 #     print('problem with ',[labels[x] for x in range(len(aa_syn_dictmax[cell_list[ii]])) if aa_syn_dictmax[cell_list[ii]][x]<-1e-3],
@@ -2450,7 +2448,7 @@ def plot_met_catabolism(cons_model, csol,mets=['SUCROSE'],thresh=1e-5,phases=['_
     if ymax and not ybreak:
         plt.ylim([0,ymax])
     # plt.savefig('RegrEx_plots/'+'1_transfer_large_day.png', bbox_inches='tight')
-    plt.ylabel(r'flux ($\mu$M/m$^2$/s)')
+    plt.ylabel(r'flux ($\mu$mol/m$^2$/s)')
     plt.show()
     return met_cat
 
