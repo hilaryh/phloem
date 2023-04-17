@@ -6,7 +6,7 @@ import pandas as pd
 from math import nan
 import re
 
-def mainCR(minstd,modelpath=None,cplxs=0):
+def mainCR(minstd,modelpath=None,cplxs=0,half_maint=None,remove_PSII=None,reverse_hppase=None):
     transcriptome_data='Kim_et_al_2021_transcriptome_latest.csv'
     gene_mapping      ='Model_gene_rxn_mappings_Arabidopsis.csv'
     vfva_sol=None
@@ -16,19 +16,14 @@ def mainCR(minstd,modelpath=None,cplxs=0):
     modelpath='combo_stem.xml'
     stem_modelm=io.read_sbml_model(modelpath)
     stem_modelm.reactions.aPPI_c_CC_SE_l.lower_bound=-1000
-    # # Halve SE and pSE maintenance costs...
-    # for rxn in stem_modelm.reactions:
-    #     if 'SE' in rxn.id and ('ATPase_tx' in rxn.id or 'turnover' in rxn.id):
-    #         rxn.lower_bound = 0.5*rxn.lower_bound
-
     if not vfva_sol:
         vfva_sol=flux_variability_analysis(stem_modelm)
     
     Ddict, Dstddict = loadTranscriptome(stem_modelm,transcriptome_data,gene_mapping,minstd,cplxs)
     stem_modelm,rxn_weighting,rxnitweighting,regrexdifference,coefficients,regrexconstraint,Ddiffp,Ddiffn, Dcons,Dconsdp,Dconsdn = addRegrexCons(stem_modelm,Ddict,Dstddict,gene_mapping,minstd)
-    saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxnitweighting,vfva_sol,minstd,modelpath)
+    saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxnitweighting,vfva_sol,minstd,modelpath,remove_PSII,half_maint,reverse_hppase)
 
-def saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxn_weighting,vfva_sol,minstd,modelpath):
+def saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxn_weighting,vfva_sol,minstd,modelpath,remove_PSII,half_maint,reverse_hppase):
     ub={}
     lb={}
     for rxn in stem_modelm.reactions:
@@ -39,14 +34,42 @@ def saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxn_weighting,vfva_sol,
     stem_modelm.reactions.diel_biomass.upper_bound=1000
     # stem_modelm.reactions.diel_biomass.lower_bound=temp['diel_biomass']
     solmax = pfba(stem_modelm)
-    print(solmax['diel_biomass'])
-
-    stem_modelm.reactions.PSII_RXN_p_CC_l.upper_bound=0
-    stem_modelm.objective='diel_biomass'
-    nopsiisolmax = pfba(stem_modelm)
-    stem_modelm.reactions.PSII_RXN_p_CC_l.upper_bound=ub['PSII_RXN_p_CC_l']
     regrexobj=stem_modelm.problem.Objective(regrexdifference,
         direction='min')
+    if remove_PSII:
+        # Remove PS II reaction from model
+        stem_modelm.reactions.PSII_RXN_p_CC_l.upper_bound=0
+        stem_modelm.objective='diel_biomass'
+        nopsiisolmax = pfba(stem_modelm)
+        stem_modelm.objective=regrexobj
+        stem_modelm.reactions.diel_biomass.lower_bound=float(nopsiisolmax['diel_biomass']*0.68)
+        nopsiirsol=pfba(stem_modelm)
+        nopsiifva_sol2 = flux_variability_analysis(stem_modelm)
+        stem_modelm.reactions.PSII_RXN_p_CC_l.upper_bound=ub['PSII_RXN_p_CC_l']
+    if half_maint:
+    # # Halve SE and pSE maintenance costs...
+        for rxn in stem_modelm.reactions:
+            if 'SE' in rxn.id and ('ATPase_tx' in rxn.id or 'turnover' in rxn.id):
+                rxn.lower_bound = 0.5*rxn.lower_bound
+        stem_modelm.objective='diel_biomass'
+        hmsolmax=pfba(stem_modelm)
+        stem_modelm.objective=regrexobj
+        stem_modelm.reactions.diel_biomass.lower_bound=float(hmsolmax['diel_biomass']*0.68)
+        hmrsol=pfba(stem_modelm)
+        hmfva_sol = flux_variability_analysis(stem_modelm)
+        for rxn in stem_modelm.reactions:
+            if 'SE' in rxn.id and ('ATPase_tx' in rxn.id or 'turnover' in rxn.id):
+                rxn.lower_bound = lb[rxn.id]
+    if reverse_hppase:
+    # # Halve SE and pSE maintenance costs...
+        stem_modelm.reactions.PROTON_PPI_ec_CC_l.upper_bound=-0.1
+        stem_modelm.objective='diel_biomass'
+        rppsolmax=pfba(stem_modelm)
+        stem_modelm.objective=regrexobj
+        stem_modelm.reactions.diel_biomass.lower_bound=float(rppsolmax['diel_biomass']*0.68)
+        rpprsol=pfba(stem_modelm)
+        rppfva_sol = flux_variability_analysis(stem_modelm)
+        stem_modelm.reactions.PROTON_PPI_ec_CC_l.upper_bound=ub['PROTON_PPI_ec_CC_l']
     stem_modelm.objective=regrexobj
     stem_modelm.reactions.diel_biomass.lower_bound=float(solmax['diel_biomass']*0.68)
     rsol=pfba(stem_modelm)
@@ -54,20 +77,8 @@ def saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxn_weighting,vfva_sol,
     fva_sol2 = flux_variability_analysis(stem_modelm)
     
     stem_modelm.reactions.diel_biomass.lower_bound=float(solmax['diel_biomass']*0.68)
-    # # Reverse H+PPase
-    # stem_modelm.reactions.PROTON_PPI_ec_CC_l.upper_bound=-0.1
-    # revppisol=pfba(stem_modelm)
-    # stem_modelm.reactions.PROTON_PPI_ec_CC_l.upper_bound=ub['PROTON_PPI_ec_CC_l']
+    
 
-    # # Limit mitochondrial bits
-    # exclrxns=pd.read_csv('excludefromSE.csv')
-    # exclrxnlist=list(exclrxns['0'])
-    # for rxn in [x for x in stem_modelm.reactions if '_SE_' in x.id or '_pSE_' in x.id]:
-    #     if any([x in rxn.id for x in exclrxnlist]):
-    #         rxn.lower_bound=0
-    #         rxn.upper_bound=0
-    # mitosol=pfba(stem_modelm)
-    # mitofva_sol = flux_variability_analysis(stem_modelm)
 
     data={'Reaction ID':[x.id for x in stem_modelm.reactions],
         # 'cell':['_'.join(x.id.split('_')[-2:]) if ('_l' in x.id or '_d' in x.id) else '' for x in stem_modelm.reactions],
@@ -83,13 +94,21 @@ def saveRegrexResults(stem_modelm,regrexdifference,Ddict,rxn_weighting,vfva_sol,
         'FVA_min (parsimonious)':[vfva_sol.minimum[x.id] for x in stem_modelm.reactions],
         'FVA_max (parsimonious)':[vfva_sol.maximum[x.id] for x in stem_modelm.reactions]}
         # 'RegrEx (AVP1 reversed)':[revppisol[x.id] for x in stem_modelm.reactions],
-        # 'FVA_min (w/o PSII)':[nopsiifva_sol2.minimum[x.id] for x in stem_modelm.reactions],
-        # 'FVA_max (w/o PSII)':[nopsiifva_sol2.maximum[x.id] for x in stem_modelm.reactions],
-        # 'RegrEx (w/o PSII)':[nopsiirsol[x.id] for x in stem_modelm.reactions],
-        # 'Parsimonious (w/o PSII)':[nopsiisolmax[x.id] for x in stem_modelm.reactions],
-        # 'Restr mitochondria':[mitosol[x.id] for x in stem_modelm.reactions],
-        # 'FVA_min (mito)':[mitofva_sol.minimum[x.id] for x in stem_modelm.reactions],
-        # 'FVA_max (mito)':[mitofva_sol.maximum[x.id] for x in stem_modelm.reactions]}
+    if remove_PSII:
+        data['FVA_min (w/o PSII)']=[nopsiifva_sol2.minimum[x.id] for x in stem_modelm.reactions]
+        data['FVA_max (w/o PSII)']=[nopsiifva_sol2.maximum[x.id] for x in stem_modelm.reactions]
+        data['RegrEx (w/o PSII)']=[nopsiirsol[x.id] for x in stem_modelm.reactions]
+        data['Parsimonious (w/o PSII)']=[nopsiisolmax[x.id] for x in stem_modelm.reactions]
+    if half_maint:
+        data['FVA_min (w/ half maintenance)']=[hmfva_sol.minimum[x.id] for x in stem_modelm.reactions]
+        data['FVA_max (w/ half maintenance)']=[hmfva_sol.maximum[x.id] for x in stem_modelm.reactions]
+        data['RegrEx (w/ half maintenance)']=[hmrsol[x.id] for x in stem_modelm.reactions]
+        data['Parsimonious (w/ half maintenance)']=[hmsolmax[x.id] for x in stem_modelm.reactions]
+    if reverse_hppase:
+        data['FVA_min (w/ forced H+-PPiase in reverse)']=[rppfva_sol.minimum[x.id] for x in stem_modelm.reactions]
+        data['FVA_max (w/ forced H+-PPiase in reverse)']=[rppfva_sol.maximum[x.id] for x in stem_modelm.reactions]
+        data['RegrEx (w/ forced H+-PPiase in reverse)']=[rpprsol[x.id] for x in stem_modelm.reactions]
+        data['Parsimonious (w/ forced H+-PPiase in reverse)']=[rppsolmax[x.id] for x in stem_modelm.reactions]
     df=pd.DataFrame(data)
     from datetime import datetime, date, time
     now = datetime.now().strftime('%Y_%m_%d')

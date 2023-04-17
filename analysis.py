@@ -1707,7 +1707,7 @@ def plot_apo_transport(stem_model,psol,cell_type='CC_l',thresh=5e-5,yscale=None,
     width=0.6
     
     if ybreak:
-        fig=plt.figure()
+        fig=plt.figure(dpi=1000)
         axb = fig.add_subplot(111)
         axb.spines['top'].set_color('none')
         axb.spines['bottom'].set_color('none')
@@ -1780,7 +1780,7 @@ def plot_apo_transport(stem_model,psol,cell_type='CC_l',thresh=5e-5,yscale=None,
             plt.ylim(max(-80,-yscale),min(100,yscale))
     if savebool:
         now = datetime.now().strftime('%Y_%m_%d')
-        plt.savefig('Figures/'+'apo_transport_'+savebool+now+'.png', bbox_inches='tight')
+        plt.savefig('Figures/'+'apo_transport_'+savebool+now+'.jpeg', bbox_inches='tight')
     plt.show()
 
 def plot_diel(cons_model, csol,thresh=5e-5,ymax=None,pc=0,fva_sol=None,rangeplot=0,ybreak=None,savebool=None):
